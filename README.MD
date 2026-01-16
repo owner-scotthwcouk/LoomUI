@@ -1,106 +1,63 @@
-# LoomUI: The Thread-Safe Interface That Weaves Itself
+# Loom UI 🧶
 
-![LoomUI Demo](demo.gif)
+**Build modern, real-time Python dashboards without writing a single line of JavaScript.**
 
-[![PyPI version](https://badge.fury.io/py/loom_ui_pkg.svg)](https://badge.fury.io/py/loom_ui_pkg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Loom UI is a lightweight, zero-dependency (almost) library that lets you create interactive single-page applications (SPAs), admin panels, and data dashboards purely in Python. It handles the frontend rendering, state management, and WebSocket communication for you.
 
-**LoomUI** is a next-generation Python framework designed to bridge the gap between simple scripts and complex dashboards. Unlike other libraries that require callbacks, manual state management, or reactive graph definitions, LoomUI uses **Invisible State Monitoring** to update your UI automatically.
-
-Write standard Python. Get a real-time SPA (Single Page Application).
-
----
-
-## 🚀 Key Features
-
-* **🪄 Function-is-the-Interface:** Use the `@expose` decorator to instantly turn any Python function into a web form with inputs and validation.
-* **🧠 Invisible State:** No `session_state["key"]`. No callbacks. Just modify `state.x = 5`, and the UI updates.
-* **⚡ WebSocket Powered:** Built on **FastAPI** and **Uvicorn** for bi-directional, real-time communication.
-* **🎨 Theme Engine:** One-line CSS variable theming. Cyberpunk? Dark mode? Corporate? Just pass a dict.
-* **📊 Integrated Charts:** Full **Chart.js** support right out of the box.
-
----
+## 🚀 Features
+* **Zero JavaScript Required:** Write Python, get a React-like UI.
+* **Real-Time by Default:** Built on WebSockets; UI updates instantly when Python state changes.
+* **Reactive State:** Just change `state.value = 10` and the UI updates automatically.
+* **Enterprise Components:** Includes Tables, Charts, Sidebars, Modals, Metrics, and Forms out of the box.
+* **Zero-Flicker Engine:** Smart DOM patching ensures smooth updates, even for high-frequency data.
 
 ## 📦 Installation
 
 ```bash
-pip install loomui
+pip install loom-ui
 ```
----
 
-## ⚡ Quick Start: The "Magic" Mode
-The fastest way to build a tool. LoomUI inspects your function signatures and generates the UI.
+## ⚡ Quick Start
+Create a file app.py:
 
 ```Python
-
-from loom import LoomApp, expose
+from loom import LoomApp, state
+import time, threading
 
 app = LoomApp()
 
-@expose
-def calculate_roi(investment: float, rate: float, years: int):
-    """Calculates return on investment instantly."""
-    return investment * ((1 + rate) ** years)
+# 1. Define State
+state.counter = 0
+
+# 2. Background Task (Optional)
+def tick():
+    while True:
+        state.counter += 1
+        time.sleep(1)
+
+threading.Thread(target=tick, daemon=True).start()
+
+# 3. Build UI
+with app.Navbar(title="My Dashboard"):
+    app.Text("v0.1.0")
+
+with app.Card(title="Live Counter"):
+    # The "$" tells Loom to bind to the state variable
+    app.Metric(label="Seconds Running", value="$counter", color="blue")
+    app.ProgressBar(value_var="counter", color="blue")
 
 if __name__ == "__main__":
     app.run()
 ```
----
-## 🛠️ Advanced: The "Layout" Mode
-For full control over dashboards, charts, and state.
+## Run it:
 
-```Python
+```Bash
 
-from loom import LoomApp, state
-
-# 1. Define Theme
-dark_theme = {"background": "#111", "text": "#0f0", "primary": "#d0f"}
-app = LoomApp(theme=dark_theme)
-
-# 2. Define State
-state.count = 0
-
-# 3. Define Logic
-def increment():
-    state.count += 1
-
-# 4. Build Layout
-with app.root:
-    app.Text("# System Monitor")
-    
-    with app.Row():
-        app.Button("INCREASE LOAD", on_click=increment)
-        app.Text("Current Load: $count") # '$' binds automatically to state
-    
-    app.Chart(
-        type="line",
-        labels=["00:00", "00:01", "00:02"],
-        data=[10, 25, 60]
-    )
-
-if __name__ == "__main__":
-    app.run()
+python app.py
 ```
----
 
-## 🎨 Theming
-LoomUI supports full customization via a simple dictionary:
-
-```Python
-
-theme = {
-    "background": "#ffffff",
-    "surface": "#f4f4f9", 
-    "text": "#333333",
-    "primary": "#6200ea",
-    "radius": "12px"
-}
-app = LoomApp(theme=theme)
-```
----
+## 📚 Documentation
+Full documentation is available in DOCS.md.
 
 ## 📄 License
-MIT License. Free to use for personal and commercial projects.
-
-
----
+MIT License

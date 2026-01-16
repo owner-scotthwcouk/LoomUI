@@ -1,26 +1,38 @@
-# D:\Dev\Loom-UI\src\loom\state.py
+# src/loom/state.py
+from contextlib import contextmanager
 
 class State:
     def __init__(self):
-        # Stores the actual variable values
         self.__dict__["_data"] = {}
+        self.__dict__["_listeners"] = []
+        self.__dict__["_batch_active"] = False
 
     def __getattr__(self, name):
-        # Return the value if it exists, otherwise return "$name" string
         return self._data.get(name, f"${name}")
 
     def __setattr__(self, name, value):
-        if name == "_data":
+        if name in ["_data", "_listeners", "_batch_active"]:
             super().__setattr__(name, value)
         else:
             self._data[name] = value
+            if not self._batch_active: self._notify()
 
-# The global state instance
+    def _notify(self):
+        for listener in self._listeners:
+            try: listener()
+            except: pass
+
+    def add_listener(self, func):
+        self._listeners.append(func)
+
+    @contextmanager
+    def batch_update(self):
+        self._batch_active = True
+        try: yield
+        finally:
+            self._batch_active = False
+            self._notify()
+
 state = State()
-
-# GLOBAL REGISTRIES (Moved here to stop circular imports)
-# 1. Keeps track of "with app.Row():" nesting
 current_context = [] 
-
-# 2. Keeps track of Buttons so we can find their 'on_click' functions later
 component_registry = {}

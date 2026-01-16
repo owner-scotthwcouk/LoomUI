@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loom_ui_pkg"
-version = "0.0.2"
+version = "0.1.0"
 description = "The Thread-Safe, State-Aware Interface that Weaves Itself."
 authors = [{name = "Scott Harvey-Whittle", email = "scott@scott-hw.online"}]
 readme = "README.md"
@@ -17,3 +17,4 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/owner-scotthwcouk/LoomUI"
+"Documentation" = "https://github.com/owner-scotthwcouk/loom-ui/blob/main/DOCS.md"
