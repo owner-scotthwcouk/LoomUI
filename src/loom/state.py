@@ -1,41 +1,26 @@
-from typing import Dict, List, Any
+# D:\Dev\Loom-UI\src\loom\state.py
 
-class ReactiveState:
-    """
-    A smart object that notifies the UI when its attributes change.
-    """
+class State:
     def __init__(self):
-        # Store actual values in a private dict
-        self._values = {}
-        # Keep track of which Component IDs are watching which variable name
-        self._listeners: Dict[str, List[str]] = {}
-        # Reference to the app so we can send updates
-        self._app_ref = None
+        # Stores the actual variable values
+        self.__dict__["_data"] = {}
 
-    def __setattr__(self, name: str, value: Any):
-        if name.startswith("_"):
+    def __getattr__(self, name):
+        # Return the value if it exists, otherwise return "$name" string
+        return self._data.get(name, f"${name}")
+
+    def __setattr__(self, name, value):
+        if name == "_data":
             super().__setattr__(name, value)
         else:
-            self._values[name] = value
-            # NOTIFY: If anyone is listening to this variable, update them!
-            if self._app_ref and name in self._listeners:
-                for comp_id in self._listeners[name]:
-                    self._app_ref.push_update(comp_id, value)
+            self._data[name] = value
 
-    def __getattr__(self, name: str):
-        try:
-            return self._values[name]
-        except KeyError:
-            # Return empty string to prevent crashes if accessed early
-            return ""
+# The global state instance
+state = State()
 
-    def bind(self, key: str, component_id: str):
-        """Link a UI component to a state variable."""
-        if key not in self._listeners:
-            self._listeners[key] = []
-        self._listeners[key].append(component_id)
-        # Return current value if it exists
-        return self._values.get(key, "")
+# GLOBAL REGISTRIES (Moved here to stop circular imports)
+# 1. Keeps track of "with app.Row():" nesting
+current_context = [] 
 
-# Create the global instance
-state = ReactiveState()
+# 2. Keeps track of Buttons so we can find their 'on_click' functions later
+component_registry = {}

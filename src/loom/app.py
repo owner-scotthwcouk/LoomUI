@@ -1,241 +1,149 @@
+# D:\Dev\Loom-UI\src\loom\app.py
 import uvicorn
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
-import asyncio
 import json
-from .components import Column, Row, Text, Button, Input, Chart
-from .state import state
 
-# --- DEFAULT THEME ---
-DEFAULT_THEME = {
-    "background": "#f4f4f9",
-    "surface": "#ffffff",
-    "text": "#1f2937",
-    "primary": "#2563eb",
-    "primary_hover": "#1d4ed8",
-    "border": "#e5e7eb",
-    "font": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    "radius": "8px"
-}
+# Import components and state cleanly
+from .components import Column, Row, Text, Button, Input, Chart, Component, Card
+from .state import current_context, state, component_registry
 
 class LoomApp:
-    def __init__(self, theme=None):
+    def __init__(self):
         self.app = FastAPI()
-        self.root = Column() 
-        self.component_map = {}
-        self.active_socket = None
+        # The root is a Column that holds everything
+        self.root = Column()
         
-        # Merge user theme with default
-        self.theme = DEFAULT_THEME.copy()
-        if theme:
-            self.theme.update(theme)
-        
-        # Expose components
-        self.Column = Column
-        self.Row = Row
-        self.Text = Text
-        self.Button = Button
-        self.Input = Input
-        self.Chart = Chart
-        
-        state._app_ref = self
-        
-        self.app.get("/")(self.get_html)
-        self.app.websocket("/ws")(self.websocket_endpoint)
+        # Setup the "Global" context to start at the root
+        current_context.append(self.root)
 
-    def run(self, host="127.0.0.1", port=8000):
-        uvicorn.run(self.app, host=host, port=port)
+        self._setup_routes()
 
-    def _register_all(self, comp):
-        self.component_map[comp.id] = comp
-        if hasattr(comp, 'children'):
-            for child in comp.children:
-                self._register_all(child)
+    # --- HELPER TO ADD COMPONENTS ---
+    def add(self, component):
+        """Adds a component to the currently active container."""
+        if current_context:
+            parent = current_context[-1]
+            # Ensure we don't accidentally add to self if something went wrong
+            if parent != component:
+                parent.add(component)
+        else:
+            self.root.add(component)
+            
+    # --- SHORTCUTS ---
+    def Text(self, *args, **kwargs): self.add(Text(*args, **kwargs))
+    def Button(self, *args, **kwargs): self.add(Button(*args, **kwargs))
+    def Input(self, *args, **kwargs): self.add(Input(*args, **kwargs))
+    def Chart(self, *args, **kwargs): self.add(Chart(*args, **kwargs))
+    
+    # Context managers return the instance, they don't add themselves automatically yet
+    def Row(self, *args, **kwargs): 
+        r = Row(*args, **kwargs)
+        self.add(r)
+        return r
 
-    def push_update(self, component_id, new_value):
-        if self.active_socket:
-            payload = {"action": "update", "id": component_id, "value": str(new_value)}
-            asyncio.create_task(self.active_socket.send_text(json.dumps(payload)))
+    def Column(self, *args, **kwargs): 
+        c = Column(*args, **kwargs)
+        self.add(c)
+        return c
 
-    async def get_html(self):
-        self._register_all(self.root)
-        initial_tree = json.dumps(self.root.to_json())
-        
-        # Inject CSS Variables based on Python Theme Dict
-        css_vars = f"""
-            --bg-color: {self.theme['background']};
-            --surface-color: {self.theme['surface']};
-            --text-color: {self.theme['text']};
-            --primary-color: {self.theme['primary']};
-            --primary-hover: {self.theme['primary_hover']};
-            --border-color: {self.theme['border']};
-            --font-family: {self.theme['font']};
-            --radius: {self.theme['radius']};
-        """
-        
-        html = f"""
+    def Card(self, *args, **kwargs): 
+        c = Card(*args, **kwargs)
+        self.add(c)
+        return c
+
+    # --- SERVER LOGIC ---
+    def _setup_routes(self):
+        html_template = """
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Loom App</title>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <style>
-                :root {{
-                    {css_vars}
-                }}
-                
-                body {{ 
-                    font-family: var(--font-family); 
-                    padding: 2rem; 
-                    background: var(--bg-color); 
-                    color: var(--text-color);
-                    transition: background 0.3s, color 0.3s;
-                }}
-                
-                #root {{ 
-                    max-width: 900px; 
-                    margin: 0 auto; 
-                    background: var(--surface-color); 
-                    padding: 40px; 
-                    border-radius: 16px; 
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.05); 
-                }}
-                
-                .Column {{ display: flex; flex-direction: column; gap: 20px; }}
-                .Row {{ display: flex; flex-direction: row; gap: 20px; align-items: center; flex-wrap: wrap; }}
-                
-                button {{ 
-                    padding: 12px 24px; 
-                    cursor: pointer; 
-                    background: var(--primary-color); 
-                    color: white; 
-                    border: none; 
-                    border-radius: var(--radius); 
-                    font-weight: 600;
-                    letter-spacing: 0.5px;
-                    transition: all 0.2s ease;
-                }}
-                button:hover {{ background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
-                button:active {{ transform: translateY(0); }}
-
-                input {{
-                    padding: 10px 16px;
-                    border: 2px solid var(--border-color);
-                    border-radius: var(--radius);
-                    font-size: 15px;
-                    background: transparent;
-                    color: var(--text-color);
-                    outline: none;
-                    transition: border-color 0.2s;
-                }}
-                input:focus {{ border-color: var(--primary-color); }}
-                
-                div {{ font-size: 16px; line-height: 1.6; }}
-                
-                h1, h2, h3 {{ margin: 0; font-weight: 700; color: var(--text-color); }}
-                
-                canvas {{ max-width: 100%; }}
-            </style>
-        </head>
-        <body>
-            <div id="root"></div>
+            <title>LoomUI</title>
+            <script src="https://cdn.tailwindcss.com"></script>
             <script>
-                const rootData = {initial_tree};
-                const ws = new WebSocket("ws://" + window.location.host + "/ws");
-
-                function render(comp, parent) {{
-                    let el;
-                    if (comp.type === "Column" || comp.type === "Row") {{
-                        el = document.createElement("div");
-                        el.className = comp.type;
-                    }} else if (comp.type === "Text") {{
-                        el = document.createElement("div");
-                        // Rudimentary header detection
-                        if (comp.value.startsWith("# ")) {{
-                            const h = document.createElement("h2");
-                            h.innerText = comp.value.replace("# ", "");
-                            el = h;
-                        }} else {{
-                            el.innerText = comp.value;
-                        }}
-                    }} else if (comp.type === "Button") {{
-                        el = document.createElement("button");
-                        el.innerText = comp.label;
-                        el.onclick = () => ws.send(JSON.stringify({{event: "click", id: comp.id}}));
-                    }} else if (comp.type === "Input") {{
-                        el = document.createElement("input");
-                        el.value = comp.value;
-                        el.oninput = (e) => {{
-                            ws.send(JSON.stringify({{
-                                event: "input", 
-                                id: comp.id, 
-                                value: e.target.value
-                            }}));
-                        }};
-                    }} else if (comp.type === "Chart") {{
-                        const container = document.createElement("div");
-                        container.style.width = "100%"; 
-                        const canvas = document.createElement("canvas");
-                        container.appendChild(canvas);
-                        el = container;
-                        
-                        requestAnimationFrame(() => {{
-                            // Auto-color based on CSS variables is hard in JS, so we use defaults for now
-                            new Chart(canvas, {{
-                                type: comp.chartType,
-                                data: {{
-                                    labels: comp.labels,
-                                    datasets: [{{
-                                        label: 'Data',
-                                        data: comp.data,
-                                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                                        borderColor: 'rgba(54, 162, 235, 1)',
-                                        borderWidth: 1
-                                    }}]
-                                }},
-                                options: {{ responsive: true }}
-                            }});
-                        }});
-                    }}
-                    
-                    el.id = comp.id;
-                    parent.appendChild(el);
-                    if (comp.children) comp.children.forEach(child => render(child, el));
-                }}
-
-                render(rootData, document.getElementById("root"));
-
-                ws.onmessage = (event) => {{
+                const ws = new WebSocket("ws://localhost:8000/ws");
+                ws.onmessage = function(event) {
                     const data = JSON.parse(event.data);
-                    if (data.action === "update") {{
-                        const el = document.getElementById(data.id);
-                        if (el) {{
-                            if (el.tagName === "INPUT") {{
-                                if (document.activeElement !== el) el.value = data.value;
-                            }} else {{
-                                el.innerText = data.value;
-                            }}
-                        }}
-                    }}
-                }};
+                    document.getElementById("app").innerHTML = ""; 
+                    render(data, document.getElementById("app"));
+                };
+
+                function render(node, parent) {
+                    let el;
+                    if (node.type === "Text") {
+                        el = document.createElement("div");
+                        // Handle Markdown Headers
+                        if (node.content.startsWith("# ")) {
+                             el = document.createElement("h1");
+                             el.innerText = node.content.replace("# ", "");
+                             el.className = "text-3xl font-bold mb-4";
+                        } else if (node.content.startsWith("## ")) {
+                             el = document.createElement("h2");
+                             el.innerText = node.content.replace("## ", "");
+                             el.className = "text-2xl font-bold mb-2";
+                        } else if (node.content === "---") {
+                             el = document.createElement("hr");
+                             el.className = "my-4 border-gray-300";
+                        } else {
+                             el.innerText = node.content;
+                             el.className = "text-gray-700";
+                        }
+                    } 
+                    else if (node.type === "Button") {
+                        el = document.createElement("button");
+                        el.innerText = node.label;
+                        el.className = "px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition mr-2";
+                        el.onclick = () => ws.send(JSON.stringify({type: "click", id: node.id}));
+                    }
+                    else if (node.type === "Row") {
+                        el = document.createElement("div");
+                        el.className = "flex flex-row gap-4 items-center mb-2";
+                        if (node.children) node.children.forEach(c => render(c, el));
+                    }
+                    else if (node.type === "Column" || node.type === "Card") { 
+                        el = document.createElement("div");
+                        if (node.type === "Card") el.className = "p-6 bg-white shadow-lg rounded-xl border border-gray-100 mb-4";
+                        else el.className = "flex flex-col gap-2";
+                        if (node.children) node.children.forEach(c => render(c, el));
+                    }
+                    
+                    if (el) parent.appendChild(el);
+                }
             </script>
+        </head>
+        <body class="bg-gray-50 p-10">
+            <div id="app" class="max-w-2xl mx-auto"></div>
         </body>
         </html>
         """
-        return HTMLResponse(html)
 
-    async def websocket_endpoint(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_socket = websocket
-        try:
+        @self.app.get("/")
+        async def get():
+            return HTMLResponse(html_template)
+
+        @self.app.websocket("/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            await websocket.accept()
+            # Send initial UI
+            await websocket.send_json(self.root.to_dict())
+            
             while True:
-                data = await websocket.receive_text()
-                msg = json.loads(data)
-                if msg['event'] == 'click':
-                    comp = self.component_map.get(msg['id'])
-                    if comp and hasattr(comp, 'on_click'): comp.on_click()
-                elif msg['event'] == 'input':
-                    comp = self.component_map.get(msg['id'])
-                    if comp and hasattr(comp, 'handle_input'): comp.handle_input(msg['value'])
-        except Exception as e:
-            print(f"WebSocket disconnected: {e}")
+                try:
+                    data = await websocket.receive_json()
+                    if data["type"] == "click":
+                        # CRITICAL FIX: Find the component and run its function
+                        comp_id = data.get("id")
+                        if comp_id in component_registry:
+                            comp = component_registry[comp_id]
+                            if hasattr(comp, 'on_click') and comp.on_click:
+                                print(f"Executing click for {comp.label}")
+                                comp.on_click()
+                        
+                        # Re-render UI to show state changes
+                        await websocket.send_json(self.root.to_dict())
+                except Exception as e:
+                    print(f"WebSocket Error: {e}")
+                    break
+
+    def run(self):
+        uvicorn.run(self.app, host="0.0.0.0", port=8000)

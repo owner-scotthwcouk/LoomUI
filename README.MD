@@ -1,6 +1,8 @@
 # LoomUI: The Thread-Safe Interface That Weaves Itself
 
-[![PyPI version](https://badge.fury.io/py/loomui.svg)](https://badge.fury.io/py/loomui)
+![LoomUI Demo](demo.gif)
+
+[![PyPI version](https://badge.fury.io/py/loom_ui_pkg.svg)](https://badge.fury.io/py/loom_ui_pkg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **LoomUI** is a next-generation Python framework designed to bridge the gap between simple scripts and complex dashboards. Unlike other libraries that require callbacks, manual state management, or reactive graph definitions, LoomUI uses **Invisible State Monitoring** to update your UI automatically.
