@@ -17,4 +17,4 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/owner-scotthwcouk/LoomUI"
-"Documentation" = "https://github.com/owner-scotthwcouk/loom-ui/blob/main/DOCS.md"
+"Documentation" = "https://github.com/owner-scotthwcouk/loom-ui/blob/master/DOCS.md"
